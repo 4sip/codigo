@@ -1,0 +1,84 @@
+<?PHP
+date_default_timezone_set( "America/Sao_Paulo" );
+$today = date("H:i:s");
+
+if($today >= '09:00:00' && $today <= '18:30:00' ){
+
+  $mysqli = new mysqli("XXX.XXX.XXX.XXXX", "LOGIN", "SENHA", "central");
+      if (mysqli_connect_errno()) trigger_error(mysqli_connect_error());
+
+      $sql = "SELECT * FROM excel WHERE status = '0' LIMIT 10";
+      $query = $mysql->query($sql);
+      $res = mysqli_num_rows($query);
+
+//////////////////////    CONEXAO AMI  //////////////////////////////////
+$ip_AMI    = "XXXXXXXXXXXXXXXX"       /// IP DO SERVIDOR ASTERISK
+$porta_AMI = "5041"   /// PORTA DE ACESSO ASTERISK MANAGER
+$usr_AMI   = "LOGIN";      /// USUARIOS MANAGER
+$pdw_AMI   = "SENHA";      /// SENHA MANAGER
+$timeout   = "5";     /// TEMPO DE REQUISICAO
+///////////////
+
+///////////////   DADOS DO CONTEXTO DE ATENDIMENTO  /////////////////////
+$entrada   = "cobranca_ninho";  /// CONTEXTO DE ATENDIMENTO
+$DIAL      = "SIP/up2/";        /// CANAL DE DISCAGEM
+///////////////
+
+
+while($r = mysqli_fetch_array($query)){
+
+        echo $r['id']."\n";
+
+        $sql2 = "UPDATE excel SET status = '1' WHERE id = ".$r['id'];
+        $query2 = $mysql->query($sql2);
+
+//////////////////   GERACAO DE DISCAGEM AUTOMATICA  /////////////////////
+$fone      = $r['telefone'];
+$cpf       = "CPF.:".$r['cpf']." Tel: ".$fone;
+$userfield = "CALLBACK";
+///////////////////////   LOGIN   ////////////////////////////////////////
+$socket = fsockopen($ip_AMI, $porta_AMI, $errno, $errstr, $timeout);
+                fputs($socket, "Action: Login\r\n");
+                fputs($socket, "UserName: $usr_AMI\r\n");
+                fputs($socket, "Secret: $pdw_AMI\r\n\r\n");
+//////////////////////////////////////////////////////////////////////////
+                fputs($socket, "Action: Originate\r\n");
+                fputs($socket, "Channel: ".$DIAL."0".$fone."\r\n");
+                fputs($socket, "MaxRetries: 1\r\n");
+                fputs($socket, "RetryTime: 30\r\n");
+                fputs($socket, "WaitTime: 10\r\n");
+                fputs($socket, "Context: $contexto\r\n");
+                fputs($socket, "Exten: s\r\n");
+                fputs($socket, "Variable: CDR(userfield)=CALLBACK\r\n");
+                fputs($socket, "Callerid: $fone\r\n");
+                fputs($socket, "Variable: audio=\r\n");
+                fputs($socket, "#\r\n");
+                fputs($socket, "Priority: 1\r\n\r\n");
+
+
+        while (!feof($socket)) {
+
+
+							$is++;
+						        $e=fread($socket,8192);
+						        $wrets = $e;
+						        $pos=strripos($e, "Status: Fully Booted");
+							echo $e."\n";
+							echo $pos."\n";
+						        if($pos==true) { 
+						        	fputs($socket, "Action: Logoff\r\n\r\n"); 
+						        	break; 
+						        	exit;
+
+                                }
+		}
+		
+fclose($socket);
+
+sleep(1);
+}
+
+}else{
+echo $today.'.... fora de servico';
+}
+?>
